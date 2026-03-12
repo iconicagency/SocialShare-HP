@@ -1,0 +1,5 @@
+{
+  "name": "SocialSync",
+  "description": "A platform to connect social accounts, fetch website content, and share it across multiple social entities.",
+  "requestFramePermissions": []
+}
