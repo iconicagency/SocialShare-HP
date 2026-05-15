@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Bell, Shield, Key } from 'lucide-react';
+import { Save, Bell, Shield, Key, Users } from 'lucide-react';
+import { useAuth } from '@/components/firebase-provider';
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('general');
+  const { user } = useAuth();
 
   return (
     <div className="space-y-8">
@@ -29,6 +31,15 @@ export default function Settings() {
             >
               <Shield className="mr-3 h-5 w-5 flex-shrink-0 text-gray-400" aria-hidden="true" />
               General
+            </button>
+            <button
+              onClick={() => setActiveTab('access')}
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                activeTab === 'access' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-900 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <Users className="mr-3 h-5 w-5 flex-shrink-0 text-gray-400" aria-hidden="true" />
+              Access Control
             </button>
             <button
               onClick={() => setActiveTab('notifications')}
@@ -64,13 +75,13 @@ export default function Settings() {
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium leading-6 text-gray-900">Name</label>
                     <div className="mt-2">
-                      <input type="text" name="name" id="name" defaultValue="Thanh" className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" />
+                      <input type="text" name="name" id="name" defaultValue={user?.displayName || ''} className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" />
                     </div>
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium leading-6 text-gray-900">Email</label>
                     <div className="mt-2">
-                      <input type="email" name="email" id="email" defaultValue="thanhnt.ads@gmail.com" className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6" />
+                      <input type="email" name="email" id="email" readOnly value={user?.email || ''} className="block w-full rounded-md border-0 py-1.5 bg-gray-50 text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 sm:text-sm sm:leading-6 cursor-not-allowed" />
                     </div>
                   </div>
                   <div className="pt-4">
@@ -80,6 +91,35 @@ export default function Settings() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'access' && (
+            <div className="bg-white shadow sm:rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <h3 className="text-base font-semibold leading-6 text-gray-900">Authorized Users</h3>
+                <div className="mt-2 max-w-xl text-sm text-gray-500">
+                  <p>The following emails are authorized to use this tool with administrative privileges.</p>
+                </div>
+                <div className="mt-5">
+                  <ul role="list" className="divide-y divide-gray-200 border-t border-gray-200">
+                    <li className="flex items-center justify-between py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900">thanhnt.ads@gmail.com</span>
+                        <span className="text-xs text-gray-500">Primary Admin</span>
+                      </div>
+                      <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Active</span>
+                    </li>
+                    <li className="flex items-center justify-between py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900">mailanphamthi2@gmail.com</span>
+                        <span className="text-xs text-gray-500">Authorized User</span>
+                      </div>
+                      <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20">Added</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           )}

@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isDataOwner() {
+      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    function existingDataOwner() {
+      return isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // List of authorized emails (based on user request)
+    function isAuthorizedEmail() {
+      return isSignedIn() && (
+        request.auth.token.email == 'thanhnt.ads@gmail.com' ||
+        request.auth.token.email == 'mailanphamthi2@gmail.com'
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAuthorizedEmail());
+      allow write: if isAuthorizedEmail() && request.auth.uid == userId;
+    }
+
+    match /sources/{sourceId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAuthorizedEmail());
+      allow create: if isSignedIn() && isDataOwner() && request.resource.data.url is string;
+      allow update: if isSignedIn() && existingDataOwner() && isDataOwner();
+      allow delete: if isSignedIn() && existingDataOwner();
+    }
+
+    match /items/{itemId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAuthorizedEmail());
+      allow create: if isSignedIn() && isDataOwner();
+      allow update: if isSignedIn() && existingDataOwner() && isDataOwner();
+      allow delete: if isSignedIn() && existingDataOwner();
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAuthorizedEmail());
+      allow create: if isSignedIn() && isDataOwner();
+      allow update: if isSignedIn() && existingDataOwner() && isDataOwner();
+      allow delete: if isSignedIn() && existingDataOwner();
+    }
+  }
+}

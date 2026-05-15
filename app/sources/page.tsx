@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Rss, Globe, Link as LinkIcon, Plus, Trash2, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { useAuth } from '@/components/firebase-provider';
 
 interface FetchedItem {
   id: string;
@@ -12,50 +15,63 @@ interface FetchedItem {
   source: string;
   date: string;
   image?: string;
+  ownerId: string;
 }
 
 interface Source {
-  id: number;
-  type: 'rss' | 'website' | 'system';
+  id: string;
+  type: 'rss' | 'website';
   name: string;
   url: string;
   status: 'active' | 'error';
-  lastFetch: string;
-  items: number;
+  lastFetch: any;
+  itemsCount: number;
 }
 
-const initialSources: Source[] = [
-  { id: 1, type: 'rss', name: 'Tech Blog RSS', url: 'https://techblog.com/feed', status: 'active', lastFetch: '10 mins ago', items: 145 },
-  { id: 2, type: 'website', name: 'Company News', url: 'https://mycompany.com/news', status: 'active', lastFetch: '1 hour ago', items: 32 },
-];
-
 export default function Sources() {
-  const [sources, setSources] = useState<Source[]>(initialSources);
+  const { user } = useAuth();
+  const [sources, setSources] = useState<Source[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [fetchedItems, setFetchedItems] = useState<FetchedItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Load fetched items from localStorage on mount
+  // Sync Sources from Firestore
   useEffect(() => {
-    const saved = localStorage.getItem('socialsync_fetched_items');
-    if (saved) {
-      try {
-        setFetchedItems(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse saved items', e);
-      }
-    }
-  }, []);
+    if (!user) return;
 
-  // Save fetched items to localStorage whenever they change
+    const q = query(collection(db, 'sources'), where('ownerId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const sourcesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Source[];
+      setSources(sourcesData);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Sync Fetched Items from Firestore
   useEffect(() => {
-    localStorage.setItem('socialsync_fetched_items', JSON.stringify(fetchedItems));
-  }, [fetchedItems]);
+    if (!user) return;
+
+    const q = query(collection(db, 'items'), where('ownerId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const itemsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as FetchedItem[];
+      // Sort by date descending
+      setFetchedItems(itemsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 50));
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const handleFetch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!urlInput) return;
+    if (!urlInput || !user) return;
 
     setIsLoading(true);
     setError(null);
@@ -73,28 +89,38 @@ export default function Sources() {
         throw new Error(data.error || 'Failed to fetch content');
       }
 
-      // Add to sources if not already there
-      const hostname = new URL(urlInput).hostname;
-      if (!sources.find(s => s.url === urlInput)) {
-        const newSource: Source = {
-          id: Date.now(),
+      // 1. Add to sources if new
+      let sourceId = sources.find(s => s.url === urlInput)?.id;
+      if (!sourceId) {
+        const hostname = new URL(urlInput).hostname;
+        const newSourceRef = await addDoc(collection(db, 'sources'), {
           type: data.type,
           name: data.items[0]?.source || hostname,
           url: urlInput,
           status: 'active',
-          lastFetch: 'Just now',
-          items: data.items.length,
-        };
-        setSources([newSource, ...sources]);
+          lastFetch: serverTimestamp(),
+          itemsCount: data.items.length,
+          ownerId: user.uid
+        });
+        sourceId = newSourceRef.id;
       }
 
-      // Prepend new items to fetched items
-      setFetchedItems(prev => {
-        const existingUrls = new Set(prev.map(i => i.url));
-        const newItems = data.items.filter((item: FetchedItem) => !existingUrls.has(item.url));
-        return [...newItems, ...prev].slice(0, 50); // Keep last 50
+      // 2. Add items to Firestore (batch)
+      const batch = writeBatch(db);
+      const existingUrls = new Set(fetchedItems.map(i => i.url));
+      
+      data.items.forEach((item: any) => {
+        if (!existingUrls.has(item.url)) {
+          const itemRef = doc(collection(db, 'items'));
+          batch.set(itemRef, {
+            ...item,
+            ownerId: user.uid,
+            sourceId: sourceId
+          });
+        }
       });
-
+      
+      await batch.commit();
       setUrlInput('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -103,9 +129,25 @@ export default function Sources() {
     }
   };
 
-  const removeSource = (id: number) => {
-    setSources(sources.filter(s => s.id !== id));
+  const removeSource = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'sources', id));
+      // Optionally clean up items, but Firestore rules handle access
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
   };
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Globe className="h-16 w-16 text-gray-300 mb-4" />
+        <h3 className="text-xl font-semibold text-gray-900">Sign in to manage sources</h3>
+        <p className="text-gray-500 mt-2">Connect your account to start fetching and sharing content.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -189,7 +231,9 @@ export default function Sources() {
                         </div>
                         <div className="hidden md:block">
                           <div>
-                            <p className="text-sm text-gray-900">Last fetched {source.lastFetch}</p>
+                            <p className="text-sm text-gray-900">
+                              Last fetched {source.lastFetch?.toDate ? source.lastFetch.toDate().toLocaleString() : 'Never'}
+                            </p>
                             <p className="mt-2 flex items-center text-sm text-gray-500">
                               {source.status === 'active' ? (
                                 <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
@@ -200,14 +244,26 @@ export default function Sources() {
                                   Error
                                 </span>
                               )}
-                              <span className="ml-2">{source.items} items found</span>
+                              <span className="ml-2">{source.itemsCount} items found</span>
                             </p>
                           </div>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                      <button type="button" className="text-gray-400 hover:text-indigo-600"><RefreshCw className="h-5 w-5" /></button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setUrlInput(source.url);
+                          // Trigger fetch
+                          const form = document.querySelector('form');
+                          if (form) form.requestSubmit();
+                        }}
+                        disabled={isLoading}
+                        className="text-gray-400 hover:text-indigo-600 disabled:opacity-50"
+                      >
+                        <RefreshCw className={cn("h-5 w-5", isLoading && urlInput === source.url && "animate-spin")} />
+                      </button>
                       <button type="button" onClick={() => removeSource(source.id)} className="text-gray-400 hover:text-red-600"><Trash2 className="h-5 w-5" /></button>
                     </div>
                   </div>

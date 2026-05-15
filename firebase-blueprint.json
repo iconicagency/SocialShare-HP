@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and permissions",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Source": {
+      "title": "Content Source",
+      "description": "A website or RSS feed to fetch content from",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["rss", "website"] },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "error"] },
+        "lastFetch": { "type": "string", "format": "date-time" },
+        "itemsCount": { "type": "number" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["type", "name", "url", "status", "ownerId"]
+    },
+    "FetchedItem": {
+      "title": "Fetched Item",
+      "description": "Content fetched from a source",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "url": { "type": "string" },
+        "source": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "image": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "sourceId": { "type": "string" }
+      },
+      "required": ["title", "url", "ownerId", "sourceId"]
+    },
+    "SocialAccount": {
+      "title": "Social Account",
+      "description": "Connected social media account",
+      "type": "object",
+      "properties": {
+        "platformId": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "error", "disconnected"] },
+        "lastSync": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["platformId", "name", "status", "ownerId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "sources/{sourceId}": {
+      "schema": "Source",
+      "description": "Content sources"
+    },
+    "items/{itemId}": {
+      "schema": "FetchedItem",
+      "description": "Fetched content items"
+    },
+    "accounts/{accountId}": {
+      "schema": "SocialAccount",
+      "description": "Connected social media accounts"
+    }
+  }
+}

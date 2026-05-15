@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
+import { FirebaseProvider } from '@/components/firebase-provider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="flex flex-1 flex-col lg:pl-64 h-full overflow-hidden">
             <Header />
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-              {children}
+              <FirebaseProvider>
+                {children}
+              </FirebaseProvider>
             </main>
           </div>
         </div>

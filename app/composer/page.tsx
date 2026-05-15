@@ -5,6 +5,9 @@ import { Sparkles, Calendar, Image as ImageIcon, Link as LinkIcon, Send, Clock, 
 import { cn } from '@/lib/utils';
 import { platforms } from '@/lib/platforms';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { useAuth } from '@/components/firebase-provider';
 
 interface FetchedItem {
   id: string;
@@ -14,27 +17,32 @@ interface FetchedItem {
   source: string;
   date: string;
   image?: string;
+  ownerId: string;
 }
 
 export default function Composer() {
+  const { user } = useAuth();
   const [items, setItems] = useState<FetchedItem[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [postText, setPostText] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['twitter', 'linkedin']);
   const [isRewriting, setIsRewriting] = useState(false);
 
-  // Load fetched items from localStorage
+  // Sync Fetched Items from Firestore
   useEffect(() => {
-    const saved = localStorage.getItem('socialsync_fetched_items');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setItems(parsed);
-      } catch (e) {
-        console.error('Failed to parse saved items', e);
-      }
-    }
-  }, []);
+    if (!user) return;
+
+    const q = query(collection(db, 'items'), where('ownerId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const itemsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as FetchedItem[];
+      setItems(itemsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const handleContentSelect = (id: string) => {
     setSelectedContentId(id);
@@ -86,6 +94,16 @@ export default function Composer() {
     );
   };
 
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Send className="h-16 w-16 text-gray-300 mb-4" />
+        <h3 className="text-xl font-semibold text-gray-900">Sign in to compose posts</h3>
+        <p className="text-gray-500 mt-2">Connect your account to start creating and sharing content.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -108,7 +126,7 @@ export default function Composer() {
             <ul role="list" className="divide-y divide-gray-200 h-[500px] overflow-y-auto">
               {items.length === 0 ? (
                 <li className="py-10 text-center text-gray-500 text-sm">
-                  No content found. Please add a source in the "Content Sources" page.
+                  No content found. Please add a source in the &quot;Content Sources&quot; page.
                 </li>
               ) : (
                 items.map((item) => (

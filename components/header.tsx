@@ -1,8 +1,12 @@
 'use client';
 
-import { Bell, Menu, Search, User } from 'lucide-react';
+import { Bell, Menu, Search, User, LogIn, LogOut } from 'lucide-react';
+import { useAuth } from './firebase-provider';
+import Image from 'next/image';
 
 export function Header() {
+  const { user, login, logout } = useAuth();
+
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <button type="button" className="-m-2.5 p-2.5 text-gray-700 lg:hidden">
@@ -41,23 +45,44 @@ export function Header() {
 
           {/* Profile dropdown */}
           <div className="relative">
-            <button
-              type="button"
-              className="-m-1.5 flex items-center p-1.5"
-              id="user-menu-button"
-              aria-expanded="false"
-              aria-haspopup="true"
-            >
-              <span className="sr-only">Open user menu</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-                <User className="h-5 w-5" />
-              </div>
-              <span className="hidden lg:flex lg:items-center">
-                <span className="ml-4 text-sm font-semibold leading-6 text-gray-900" aria-hidden="true">
-                  Thanh
+            {user ? (
+              <button
+                type="button"
+                onClick={logout}
+                className="-m-1.5 flex items-center p-1.5"
+                id="user-menu-button"
+              >
+                <span className="sr-only">Logout</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 relative overflow-hidden">
+                  {user.photoURL ? (
+                    <Image 
+                      src={user.photoURL} 
+                      alt="" 
+                      fill 
+                      className="rounded-full object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <User className="h-5 w-5" />
+                  )}
+                </div>
+                <span className="hidden lg:flex lg:items-center">
+                  <span className="ml-4 text-sm font-semibold leading-6 text-gray-900" aria-hidden="true">
+                    {user.displayName || 'User'}
+                  </span>
+                  <LogOut className="ml-2 h-4 w-4 text-gray-400" />
                 </span>
-              </span>
-            </button>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={login}
+                className="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                <LogIn className="-ml-0.5 h-4 w-4" aria-hidden="true" />
+                Login
+              </button>
+            )}
           </div>
         </div>
       </div>
