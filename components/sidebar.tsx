@@ -10,10 +10,12 @@ import {
   PenTool,
   History,
   Settings,
+  BarChart3,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Analytics', href: '/report', icon: BarChart3 },
   { name: 'Social Accounts', href: '/accounts', icon: Share2 },
   { name: 'Content Sources', href: '/sources', icon: Globe },
   { name: 'Composer', href: '/composer', icon: PenTool },
