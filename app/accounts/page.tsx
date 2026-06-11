@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, CheckCircle2, XCircle, AlertCircle, Share2, Loader2, LogIn, Trash2, ExternalLink, Info } from 'lucide-react';
+import { Plus, CheckCircle2, AlertCircle, Share2, Loader2, LogIn, Trash2, ExternalLink, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { platforms } from '@/lib/platforms';
 import { db } from '@/lib/firebase';
@@ -19,11 +19,7 @@ interface Account {
   ownerId: string;
 }
 
-interface Toast {
-  id: number;
-  type: 'success' | 'error';
-  message: string;
-}
+interface Toast { id: number; type: 'success' | 'error'; message: string; }
 
 const DISPLAYED_PLATFORMS = [
   'facebook', 'twitter', 'linkedin', 'instagram',
@@ -32,7 +28,7 @@ const DISPLAYED_PLATFORMS = [
 ];
 
 export default function Accounts() {
-  const { user, login } = useAuth();
+  const { user, login, effectiveOwnerId, isTeam } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [addingFor, setAddingFor] = useState<string | null>(null);
@@ -49,23 +45,17 @@ export default function Accounts() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setAccounts([]); return; }
-    const q = query(collection(db, 'accounts'), where('ownerId', '==', user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setAccounts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Account[]);
-    }, () => addToast('error', 'Could not load accounts.'));
+    if (!effectiveOwnerId) { setAccounts([]); return; }
+    const q = query(collection(db, 'accounts'), where('ownerId', '==', effectiveOwnerId));
+    const unsubscribe = onSnapshot(q,
+      snap => setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Account[]),
+      () => addToast('error', 'Could not load accounts.')
+    );
     return () => unsubscribe();
-  }, [user, addToast]);
-
-  const openAddForm = (platformId: string) => {
-    setAddingFor(platformId);
-    setFormName('');
-    setFormHandle('');
-    setFormUrl('');
-  };
+  }, [effectiveOwnerId, addToast]);
 
   const saveAccount = async () => {
-    if (!user || !addingFor || !formName.trim()) return;
+    if (!effectiveOwnerId || !addingFor || !formName.trim()) return;
     setSaving(true);
     try {
       const platform = platforms.find(p => p.id === addingFor);
@@ -76,7 +66,7 @@ export default function Accounts() {
         profileUrl: formUrl.trim(),
         status: 'active',
         lastSync: serverTimestamp(),
-        ownerId: user.uid,
+        ownerId: effectiveOwnerId,
       });
       addToast('success', `${platform?.name} "${formName}" đã được thêm!`);
       setAddingFor(null);
@@ -117,34 +107,35 @@ export default function Accounts() {
 
   return (
     <div className="space-y-8">
-      {/* Toasts */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map(t => (
-          <div key={t.id} className={cn(
-            'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg pointer-events-auto',
-            t.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-          )}>
+          <div key={t.id} className={cn('flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg pointer-events-auto', t.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white')}>
             {t.type === 'success' ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
             {t.message}
           </div>
         ))}
       </div>
 
-      <div>
-        <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:tracking-tight">Social Accounts</h2>
-        <p className="mt-1 text-sm text-gray-500">Thêm thông tin tài khoản mạng xã hội của bạn để tạo link chia sẻ nhanh.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:tracking-tight">Social Accounts</h2>
+          <p className="mt-1 text-sm text-gray-500">Thêm thông tin tài khoản mạng xã hội để tạo link chia sẻ nhanh.</p>
+        </div>
+        {isTeam && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+            Team workspace
+          </span>
+        )}
       </div>
 
-      {/* Info banner */}
       <div className="rounded-md bg-blue-50 p-4 flex gap-3">
         <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-blue-700">
           <p className="font-medium">Cách hoạt động</p>
-          <p className="mt-1">Thêm tên trang/tài khoản và URL profile của bạn. Khi soạn bài ở Composer, app sẽ tạo link chia sẻ trực tiếp đến từng nền tảng — bạn chỉ cần click và đăng.</p>
+          <p className="mt-1">Thêm tên trang và URL profile. Khi soạn bài ở Composer, app sẽ tạo link chia sẻ trực tiếp — chỉ cần click và đăng.</p>
         </div>
       </div>
 
-      {/* Add account modal */}
       {addingFor && (() => {
         const platform = platforms.find(p => p.id === addingFor)!;
         return (
@@ -152,9 +143,7 @@ export default function Accounts() {
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-3 mb-5">
                 <div className={cn('flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0', platform.color)}>
-                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={platform.icon} />
-                  </svg>
+                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={platform.icon} /></svg>
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">Thêm tài khoản {platform.name}</h3>
@@ -164,43 +153,20 @@ export default function Accounts() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tên hiển thị <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                    placeholder={`Ví dụ: Hoàng Thịnh Print - ${platform.name}`}
-                    value={formName}
-                    onChange={e => setFormName(e.target.value)}
-                    autoFocus
-                  />
+                  <input type="text" className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm" placeholder={`Ví dụ: Hoàng Thịnh Print - ${platform.name}`} value={formName} onChange={e => setFormName(e.target.value)} autoFocus />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Username / Handle</label>
-                  <input
-                    type="text"
-                    className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                    placeholder="@username hoặc tên trang"
-                    value={formHandle}
-                    onChange={e => setFormHandle(e.target.value)}
-                  />
+                  <input type="text" className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm" placeholder="@username hoặc tên trang" value={formHandle} onChange={e => setFormHandle(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">URL Profile / Page</label>
-                  <input
-                    type="url"
-                    className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                    placeholder={`https://${platform.id}.com/yourpage`}
-                    value={formUrl}
-                    onChange={e => setFormUrl(e.target.value)}
-                  />
+                  <input type="url" className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm" placeholder={`https://${platform.id}.com/yourpage`} value={formUrl} onChange={e => setFormUrl(e.target.value)} />
                 </div>
               </div>
               <div className="mt-6 flex justify-end gap-3">
                 <button onClick={() => setAddingFor(null)} className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ring-1 ring-gray-300">Hủy</button>
-                <button
-                  onClick={saveAccount}
-                  disabled={saving || !formName.trim()}
-                  className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-                >
+                <button onClick={saveAccount} disabled={saving || !formName.trim()} className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   {saving ? 'Đang lưu...' : 'Lưu tài khoản'}
                 </button>
@@ -210,11 +176,10 @@ export default function Accounts() {
         );
       })()}
 
-      {/* Platform grid */}
       <div>
         <h3 className="text-base font-semibold text-gray-900 mb-4">Nền tảng</h3>
         <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {displayedPlatforms.map((platform) => {
+          {displayedPlatforms.map(platform => {
             const connected = accounts.filter(a => a.platformId === platform.id);
             return (
               <li key={platform.id} className="divide-y divide-gray-200 rounded-lg bg-white shadow">
@@ -224,15 +189,10 @@ export default function Accounts() {
                     <p className="text-xs text-gray-400">{connected.length > 0 ? `${connected.length} tài khoản` : 'Chưa thêm'}</p>
                   </div>
                   <div className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full', platform.color)}>
-                    <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={platform.icon} />
-                    </svg>
+                    <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={platform.icon} /></svg>
                   </div>
                 </div>
-                <button
-                  onClick={() => openAddForm(platform.id)}
-                  className="flex w-full items-center justify-center gap-2 rounded-b-lg py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
-                >
+                <button onClick={() => setAddingFor(platform.id)} className="flex w-full items-center justify-center gap-2 rounded-b-lg py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50">
                   <Plus className="h-4 w-4" /> Thêm tài khoản
                 </button>
               </li>
@@ -241,7 +201,6 @@ export default function Accounts() {
         </ul>
       </div>
 
-      {/* Connected list */}
       <div>
         <h3 className="text-base font-semibold text-gray-900 mb-4">
           Tài khoản đã thêm
@@ -250,7 +209,7 @@ export default function Accounts() {
         {accounts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
             <AlertCircle className="mx-auto h-10 w-10 text-gray-300" />
-            <p className="mt-2 text-sm text-gray-500">Chưa có tài khoản nào. Bấm "Thêm tài khoản" ở platform bên trên.</p>
+            <p className="mt-2 text-sm text-gray-500">Chưa có tài khoản nào.</p>
           </div>
         ) : (
           <div className="overflow-hidden bg-white shadow sm:rounded-md">
@@ -260,9 +219,7 @@ export default function Accounts() {
                 return (
                   <li key={account.id} className="flex items-center px-4 py-4 gap-4">
                     <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full', platform?.color || 'bg-gray-400')}>
-                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d={platform?.icon || ''} />
-                      </svg>
+                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={platform?.icon || ''} /></svg>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-900 truncate">{account.name}</p>
@@ -276,14 +233,8 @@ export default function Accounts() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                        <CheckCircle2 className="h-4 w-4" /> Active
-                      </span>
-                      <button
-                        onClick={() => disconnectAccount(account.id, account.name)}
-                        disabled={disconnecting === account.id}
-                        className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 disabled:opacity-50"
-                      >
+                      <span className="inline-flex items-center gap-1 text-xs text-green-600"><CheckCircle2 className="h-4 w-4" /> Active</span>
+                      <button onClick={() => disconnectAccount(account.id, account.name)} disabled={disconnecting === account.id} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 disabled:opacity-50">
                         {disconnecting === account.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         Xóa
                       </button>
