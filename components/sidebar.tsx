@@ -3,20 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import {
-  LayoutDashboard,
-  Share2,
-  Globe,
-  PenTool,
-  History,
-  Settings,
-  BarChart3,
-} from 'lucide-react';
+import { LayoutDashboard, Share2, Globe, PenTool, History, Settings, BarChart3 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Analytics', href: '/report', icon: BarChart3 },
-  { name: 'Social Accounts', href: '/accounts', icon: Share2 },
   { name: 'Content Sources', href: '/sources', icon: Globe },
   { name: 'Composer', href: '/composer', icon: PenTool },
   { name: 'History', href: '/history', icon: History },
@@ -40,17 +31,12 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  isActive
-                    ? 'bg-indigo-50 text-indigo-600'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600',
+                  isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600',
                   'group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors'
                 )}
               >
                 <item.icon
-                  className={cn(
-                    isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-indigo-600',
-                    'mr-3 h-5 w-5 shrink-0 transition-colors'
-                  )}
+                  className={cn(isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-indigo-600', 'mr-3 h-5 w-5 shrink-0 transition-colors')}
                   aria-hidden="true"
                 />
                 {item.name}
@@ -59,14 +45,8 @@ export function Sidebar() {
           })}
         </nav>
         <div className="border-t border-gray-200 p-4">
-          <Link
-            href="/settings"
-            className="group flex items-center rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors"
-          >
-            <Settings
-              className="mr-3 h-5 w-5 shrink-0 text-gray-400 group-hover:text-indigo-600 transition-colors"
-              aria-hidden="true"
-            />
+          <Link href="/settings" className="group flex items-center rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+            <Settings className="mr-3 h-5 w-5 shrink-0 text-gray-400 group-hover:text-indigo-600 transition-colors" aria-hidden="true" />
             Settings
           </Link>
         </div>
