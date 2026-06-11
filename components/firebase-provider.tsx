@@ -2,12 +2,18 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { isTeamMember, TEAM_OWNER_EMAIL } from '@/lib/team';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  // effectiveOwnerId: ID dùng cho tất cả Firestore queries
+  // - Team members → dùng chung UID của team owner
+  // - Người khác → dùng UID của chính họ
+  effectiveOwnerId: string | null;
+  isTeam: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -15,39 +21,78 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  effectiveOwnerId: null,
+  isTeam: false,
   login: async () => {},
   logout: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
+async function getTeamOwnerUid(): Promise<string | null> {
+  try {
+    // Tìm user doc có email = TEAM_OWNER_EMAIL trong Firestore
+    const q = query(collection(db, 'users'), where('email', '==', TEAM_OWNER_EMAIL));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return snap.docs[0].id; // doc ID = Firebase UID
+    }
+  } catch (e) {
+    console.warn('Could not fetch team owner UID:', e);
+  }
+  return null;
+}
+
 export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [effectiveOwnerId, setEffectiveOwnerId] = useState<string | null>(null);
+  const [isTeam, setIsTeam] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Ensure user document exists in Firestore
+        const email = firebaseUser.email || '';
+        const teamMember = isTeamMember(email);
+        setIsTeam(teamMember);
+
+        // Ensure user doc exists
         try {
           const userRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userRef);
           if (!userDoc.exists()) {
             await setDoc(userRef, {
-              email: firebaseUser.email,
+              email,
               displayName: firebaseUser.displayName,
               photoURL: firebaseUser.photoURL,
-              role: 'user',
+              role: teamMember ? 'team' : 'user',
               createdAt: new Date().toISOString(),
             });
           }
         } catch (e) {
-          // Firestore write failed but user is still authenticated — continue
-          console.warn('Could not write user doc to Firestore:', e);
+          console.warn('Could not write user doc:', e);
         }
+
+        // Xác định effectiveOwnerId
+        if (teamMember) {
+          if (email === TEAM_OWNER_EMAIL) {
+            // Chính là owner → dùng uid của mình
+            setEffectiveOwnerId(firebaseUser.uid);
+          } else {
+            // Team member khác → tìm UID của owner
+            const ownerUid = await getTeamOwnerUid();
+            setEffectiveOwnerId(ownerUid || firebaseUser.uid);
+          }
+        } else {
+          // Không phải team → dùng uid riêng
+          setEffectiveOwnerId(firebaseUser.uid);
+        }
+
         setUser(firebaseUser);
       } else {
         setUser(null);
+        setEffectiveOwnerId(null);
+        setIsTeam(false);
       }
       setLoading(false);
     });
@@ -87,7 +132,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, effectiveOwnerId, isTeam, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

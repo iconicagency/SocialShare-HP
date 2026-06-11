@@ -2,51 +2,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner() {
-      return isSignedIn() && resource.data.ownerId == request.auth.uid;
+    // Team emails
+    function isTeamMember() {
+      return isSignedIn() && request.auth.token.email in [
+        'thanhnt.ads@gmail.com',
+        'noithathoaphatdsg@gmail.com',
+        'hoaphatnoithathm@gmail.com',
+        'hoaphatnoithathn@gmail.com'
+      ];
     }
 
-    function isNewOwner() {
-      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-    }
-
-    // Users: any signed-in user can create/read/update their own doc
+    // Users: mọi signed-in user đọc/ghi doc của mình
+    // Team member có thể đọc doc của nhau
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && (request.auth.uid == userId || isTeamMember());
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // Sources
+    // Sources, items, accounts:
+    // - Owner (ownerId == uid mình) đọc/ghi bình thường
+    // - Team member đọc/ghi bất kỳ doc nào (vì họ dùng chung ownerId của owner)
     match /sources/{sourceId} {
-      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isNewOwner() && request.resource.data.url is string;
-      allow update: if isOwner() && isNewOwner();
-      allow delete: if isOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isTeamMember()) && request.resource.data.url is string;
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
     }
 
-    // Items
     match /items/{itemId} {
-      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isNewOwner();
-      allow update: if isOwner() && isNewOwner();
-      allow delete: if isOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
     }
 
-    // Accounts
     match /accounts/{accountId} {
-      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isNewOwner();
-      allow update: if isOwner() && isNewOwner();
-      allow delete: if isOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isTeamMember());
     }
   }
 }
