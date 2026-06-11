@@ -1,6 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;
@@ -11,54 +12,41 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isDataOwner() {
-      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-    }
-
-    function existingDataOwner() {
+    function isOwner() {
       return isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    function isNewOwner() {
+      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
     }
 
-    // List of authorized emails (based on user request)
-    function isAuthorizedEmail() {
-      return isSignedIn() && (
-        request.auth.token.email == 'thanhnt.ads@gmail.com' ||
-        request.auth.token.email == 'mailanphamthi2@gmail.com'
-      );
-    }
-
+    // Users: any signed-in user can create/read/update their own doc
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAuthorizedEmail());
-      allow write: if isAuthorizedEmail() && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
+    // Sources
     match /sources/{sourceId} {
-      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAuthorizedEmail());
-      allow create: if isSignedIn() && isDataOwner() && request.resource.data.url is string;
-      allow update: if isSignedIn() && existingDataOwner() && isDataOwner();
-      allow delete: if isSignedIn() && existingDataOwner();
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isNewOwner() && request.resource.data.url is string;
+      allow update: if isOwner() && isNewOwner();
+      allow delete: if isOwner();
     }
 
+    // Items
     match /items/{itemId} {
-      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAuthorizedEmail());
-      allow create: if isSignedIn() && isDataOwner();
-      allow update: if isSignedIn() && existingDataOwner() && isDataOwner();
-      allow delete: if isSignedIn() && existingDataOwner();
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isNewOwner();
+      allow update: if isOwner() && isNewOwner();
+      allow delete: if isOwner();
     }
 
+    // Accounts
     match /accounts/{accountId} {
-      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAuthorizedEmail());
-      allow create: if isSignedIn() && isDataOwner();
-      allow update: if isSignedIn() && existingDataOwner() && isDataOwner();
-      allow delete: if isSignedIn() && existingDataOwner();
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isNewOwner();
+      allow update: if isOwner() && isNewOwner();
+      allow delete: if isOwner();
     }
   }
 }
