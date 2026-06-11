@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, CheckCircle2, XCircle, AlertCircle, Share2, Loader2, LogIn } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, CheckCircle2, XCircle, AlertCircle, Share2, Loader2, LogIn, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { platforms } from '@/lib/platforms';
 import { db } from '@/lib/firebase';
@@ -17,32 +17,41 @@ interface Account {
   ownerId: string;
 }
 
+interface Toast {
+  id: number;
+  type: 'success' | 'error';
+  message: string;
+}
+
 export default function Accounts() {
   const { user, login } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((type: 'success' | 'error', message: string) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+  }, []);
 
   useEffect(() => {
-    if (!user) {
-      setAccounts([]);
-      return;
-    }
+    if (!user) { setAccounts([]); return; }
     const q = query(collection(db, 'accounts'), where('ownerId', '==', user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Account[];
       setAccounts(data);
     }, (err) => {
       console.error('Firestore accounts error:', err);
-      setError('Could not load accounts. Check Firestore rules.');
+      addToast('error', 'Could not load accounts. Check Firestore rules.');
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user, addToast]);
 
   const connectPlatform = async (platformId: string) => {
     if (!user) return;
     setIsConnecting(platformId);
-    setError(null);
     try {
       const platform = platforms.find(p => p.id === platformId);
       await addDoc(collection(db, 'accounts'), {
@@ -52,20 +61,24 @@ export default function Accounts() {
         lastSync: serverTimestamp(),
         ownerId: user.uid,
       });
+      addToast('success', `${platform?.name} đã được kết nối thành công!`);
     } catch (err: any) {
-      console.error('Connection error:', err);
-      setError(`Failed to add account: ${err.message}`);
+      addToast('error', `Không thể kết nối: ${err.message}`);
     } finally {
       setIsConnecting(null);
     }
   };
 
-  const disconnectAccount = async (id: string) => {
+  const disconnectAccount = async (id: string, platformName: string) => {
     if (!user) return;
+    setDisconnecting(id);
     try {
       await deleteDoc(doc(db, 'accounts', id));
+      addToast('success', `Đã ngắt kết nối ${platformName}.`);
     } catch (err: any) {
-      setError(`Failed to disconnect: ${err.message}`);
+      addToast('error', `Không thể ngắt kết nối: ${err.message}`);
+    } finally {
+      setDisconnecting(null);
     }
   };
 
@@ -75,12 +88,8 @@ export default function Accounts() {
         <Share2 className="h-16 w-16 text-gray-300 mb-4" />
         <h3 className="text-xl font-semibold text-gray-900">Sign in to manage accounts</h3>
         <p className="text-gray-500 mt-2 mb-6">Connect your social media profiles to start automating your content.</p>
-        <button
-          onClick={login}
-          className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-        >
-          <LogIn className="h-4 w-4" />
-          Sign in with Google
+        <button onClick={login} className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+          <LogIn className="h-4 w-4" /> Sign in with Google
         </button>
       </div>
     );
@@ -88,6 +97,27 @@ export default function Accounts() {
 
   return (
     <div className="space-y-8">
+      {/* Toast notifications */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg pointer-events-auto transition-all duration-300',
+              toast.type === 'success'
+                ? 'bg-green-600 text-white'
+                : 'bg-red-600 text-white'
+            )}
+          >
+            {toast.type === 'success'
+              ? <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
+              : <AlertCircle className="h-5 w-5 flex-shrink-0" />
+            }
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
       <div>
         <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
           Social Accounts
@@ -97,19 +127,15 @@ export default function Accounts() {
         </p>
       </div>
 
-      {error && (
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
-
       {/* Available Platforms */}
       <div>
         <h3 className="text-base font-semibold leading-6 text-gray-900 mb-4">Available Platforms</h3>
         <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {platforms.slice(0, 12).map((platform) => {
-            const isConnected = accounts.some(a => a.platformId === platform.id);
+            const connectedAccount = accounts.find(a => a.platformId === platform.id);
+            const isConnected = !!connectedAccount;
             const isThisConnecting = isConnecting === platform.id;
+            const isThisDisconnecting = disconnecting === connectedAccount?.id;
             return (
               <li key={platform.id} className="col-span-1 divide-y divide-gray-200 rounded-lg bg-white shadow">
                 <div className="flex w-full items-center justify-between space-x-6 p-6">
@@ -129,30 +155,32 @@ export default function Accounts() {
                     </svg>
                   </div>
                 </div>
-                <div>
-                  <div className="-mt-px flex divide-x divide-gray-200">
-                    <div className="flex w-0 flex-1">
-                      <button
-                        onClick={() => !isConnected && connectPlatform(platform.id)}
-                        disabled={isConnecting !== null || isConnected}
-                        className={cn(
-                          'relative -mr-px inline-flex w-0 flex-1 items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold',
-                          isConnected
-                            ? 'text-green-600 cursor-default'
-                            : 'text-gray-900 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'
-                        )}
-                      >
-                        {isThisConnecting ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-                        ) : isConnected ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <Plus className="h-5 w-5 text-gray-400" />
-                        )}
-                        {isThisConnecting ? 'Connecting...' : isConnected ? 'Connected' : 'Connect'}
-                      </button>
-                    </div>
-                  </div>
+                <div className="-mt-px flex divide-x divide-gray-200">
+                  {isConnected ? (
+                    <button
+                      onClick={() => disconnectAccount(connectedAccount.id, platform.name)}
+                      disabled={isThisDisconnecting}
+                      className="relative inline-flex w-full items-center justify-center gap-x-2 rounded-b-lg border border-transparent py-3 text-sm font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isThisDisconnecting
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Trash2 className="h-4 w-4" />
+                      }
+                      {isThisDisconnecting ? 'Removing...' : 'Disconnect'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => connectPlatform(platform.id)}
+                      disabled={isConnecting !== null}
+                      className="relative inline-flex w-full items-center justify-center gap-x-2 rounded-b-lg border border-transparent py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isThisConnecting
+                        ? <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                        : <Plus className="h-4 w-4 text-gray-400" />
+                      }
+                      {isThisConnecting ? 'Connecting...' : 'Connect'}
+                    </button>
+                  )}
                 </div>
               </li>
             );
@@ -160,9 +188,16 @@ export default function Accounts() {
         </ul>
       </div>
 
-      {/* Connected Accounts */}
+      {/* Connected Accounts list */}
       <div>
-        <h3 className="text-base font-semibold leading-6 text-gray-900 mb-4">Connected Accounts</h3>
+        <h3 className="text-base font-semibold leading-6 text-gray-900 mb-4">
+          Connected Accounts
+          {accounts.length > 0 && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+              {accounts.length}
+            </span>
+          )}
+        </h3>
         {accounts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-dashed border-gray-300">
             <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
@@ -174,6 +209,7 @@ export default function Accounts() {
             <ul role="list" className="divide-y divide-gray-200">
               {accounts.map((account) => {
                 const platform = platforms.find(p => p.id === account.platformId);
+                const isThisDisconnecting = disconnecting === account.id;
                 return (
                   <li key={account.id}>
                     <div className="flex items-center px-4 py-4 sm:px-6">
@@ -188,31 +224,30 @@ export default function Accounts() {
                         <div className="min-w-0 flex-1 px-4 md:grid md:grid-cols-2 md:gap-4">
                           <div>
                             <p className="truncate text-sm font-medium text-indigo-600">{account.name}</p>
-                            <p className="mt-2 flex items-center text-sm text-gray-500">
+                            <p className="mt-1 flex items-center text-sm text-gray-500">
                               <span className="truncate">{platform?.name}</span>
                             </p>
                           </div>
                           <div className="hidden md:block">
-                            <p className="text-sm text-gray-900">
-                              Last synced {account.lastSync?.toDate ? account.lastSync.toDate().toLocaleString() : 'Just now'}
+                            <p className="text-sm text-gray-500">
+                              {account.lastSync?.toDate ? account.lastSync.toDate().toLocaleString() : 'Just now'}
                             </p>
-                            <p className="mt-2 flex items-center text-sm text-gray-500">
+                            <p className="mt-1 flex items-center text-sm">
                               {account.status === 'active' ? (
-                                <CheckCircle2 className="mr-1.5 h-5 w-5 flex-shrink-0 text-green-400" />
-                              ) : account.status === 'error' ? (
-                                <AlertCircle className="mr-1.5 h-5 w-5 flex-shrink-0 text-red-400" />
+                                <><CheckCircle2 className="mr-1.5 h-4 w-4 text-green-400" /><span className="text-green-600">Active</span></>
                               ) : (
-                                <XCircle className="mr-1.5 h-5 w-5 flex-shrink-0 text-gray-400" />
+                                <><XCircle className="mr-1.5 h-4 w-4 text-gray-400" /><span className="text-gray-500">Disconnected</span></>
                               )}
-                              {account.status === 'active' ? 'Active' : account.status === 'error' ? 'Needs Attention' : 'Disconnected'}
                             </p>
                           </div>
                         </div>
                       </div>
                       <button
-                        onClick={() => disconnectAccount(account.id)}
-                        className="text-sm font-medium text-red-600 hover:text-red-500"
+                        onClick={() => disconnectAccount(account.id, platform?.name || 'account')}
+                        disabled={isThisDisconnecting}
+                        className="ml-4 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed border border-red-200"
                       >
+                        {isThisDisconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         Disconnect
                       </button>
                     </div>
