@@ -1,1 +1,37 @@
-aW1wb3J0IHR5cGUgeyBNZXRhZGF0YSB9IGZyb20gJ25leHQnOwppbXBvcnQgeyBJbnRlciB9IGZyb20gJ25leHQvZm9udC9nb29nbGUnOwppbXBvcnQgJy4vZ2xvYmFscy5jc3MnOwppbXBvcnQgeyBTaWRlYmFyIH0gZnJvbSAnQC9jb21wb25lbnRzL3NpZGViYXInOwppbXBvcnQgeyBIZWFkZXIgfSBmcm9tICdAL2NvbXBvbmVudHMvaGVhZGVyJzsKaW1wb3J0IHsgRmlyZWJhc2VQcm92aWRlciB9IGZyb20gJ0AvY29tcG9uZW50cy9maXJlYmFzZS1wcm92aWRlcic7Cgpjb25zdCBpbnRlciA9IEludGVyKHsgc3Vic2V0czogWydsYXRpbiddLCB2YXJpYWJsZTogJy0tZm9udC1zYW5zJyB9KTsKCmV4cG9ydCBjb25zdCBtZXRhZGF0YTogTWV0YWRhdGEgPSB7CiAgdGl0bGU6ICdTb2NpYWxTeW5jIC0gQ29ubmVjdCwgRmV0Y2gsIFNoYXJlJywKICBkZXNjcmlwdGlvbjogJ0Nvbm5lY3Qgc29jaWFsIGFjY291bnRzLCBmZXRjaCB3ZWJzaXRlIGNvbnRlbnQsIGFuZCBzaGFyZSBpdCBhY3Jvc3MgbXVsdGlwbGUgc29jaWFsIGVudGl0aWVzLicsCn07CgpleHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBSb290TGF5b3V0KHsgY2hpbGRyZW4gfTogeyBjaGlsZHJlbjogUmVhY3QuUmVhY3ROb2RlIH0pIHsKICByZXR1cm4gKAogICAgPGh0bWwgbGFuZz0iZW4iIGNsYXNzTmFtZT17YCR7aW50ZXIudmFyaWFibGV9IGgtZnVsbCBiZy1ncmF5LTUwYH0+CiAgICAgIDxib2R5IGNsYXNzTmFtZT0iaC1mdWxsIGZvbnQtc2FucyBhbnRpYWxpYXNlZCB0ZXh0LWdyYXktOTAwIiBzdXBwcmVzc0h5ZHJhdGlvbldhcm5pbmc+CiAgICAgICAgPEZpcmViYXNlUHJvdmlkZXI+CiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBoLWZ1bGwiPgogICAgICAgICAgICB7LyogU2lkZWJhciBmb3IgZGVza3RvcCAqL30KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImhpZGRlbiBsZzpmaXhlZCBsZzppbnNldC15LTAgbGc6ei01MCBsZzpmbGV4IGxnOnctNjQgbGc6ZmxleC1jb2wiPgogICAgICAgICAgICAgIDxTaWRlYmFyIC8+CiAgICAgICAgICAgIDwvZGl2PgoKICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggZmxleC0xIGZsZXgtY29sIGxnOnBsLTY0IGgtZnVsbCBvdmVyZmxvdy1oaWRkZW4iPgogICAgICAgICAgICAgIDxIZWFkZXIgLz4KICAgICAgICAgICAgICA8bWFpbiBjbGFzc05hbWU9ImZsZXgtMSBvdmVyZmxvdy15LWF1dG8gcC00IHNtOnAtNiBsZzpwLTgiPgogICAgICAgICAgICAgICAge2NoaWxkcmVufQogICAgICAgICAgICAgIDwvbWFpbj4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICA8L2Rpdj4KICAgICAgICA8L0ZpcmViYXNlUHJvdmlkZXI+CiAgICAgIDwvYm9keT4KICAgIDwvaHRtbD4KICApOwp9Cg==
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { Sidebar } from '@/components/sidebar';
+import { Header } from '@/components/header';
+import { FirebaseProvider } from '@/components/firebase-provider';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+
+export const metadata: Metadata = {
+  title: 'SocialSync - Connect, Fetch, Share',
+  description: 'Connect social accounts, fetch website content, and share it across multiple social entities.',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${inter.variable} h-full bg-gray-50`}>
+      <body className="h-full font-sans antialiased text-gray-900" suppressHydrationWarning>
+        <FirebaseProvider>
+          <div className="flex h-full">
+            {/* Sidebar for desktop */}
+            <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
+              <Sidebar />
+            </div>
+
+            <div className="flex flex-1 flex-col lg:pl-64 h-full overflow-hidden">
+              <Header />
+              <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+                {children}
+              </main>
+            </div>
+          </div>
+        </FirebaseProvider>
+      </body>
+    </html>
+  );
+}
